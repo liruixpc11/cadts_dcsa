@@ -21,7 +21,8 @@ VMRUN_PATH = None
 if os.name == 'nt':
     for drive in 'CDEFGH':
         guess_path_list = (r"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe",
-                           r"C:\Program Files\VMware\VMware Workstation\vmrun.exe")
+                           r"C:\Program Files\VMware\VMware Workstation\vmrun.exe",
+                           r"H:\shiyan\VmWare\vmrun.exe")
         for _guess_path in guess_path_list:
             if os.path.exists(_guess_path):
                 VMRUN_PATH = _guess_path
@@ -58,8 +59,9 @@ class VmFileServer(object):
         try:
             time.sleep(timeout_seconds)
             self.on_timeout(url)
-        except OSError:
+        except Exception:
             pass
+
 
     def on_progress(self, url, progress):
         LOG.debug('url: %s; progress: %f.', url, progress)
@@ -78,7 +80,7 @@ class VmFileServer(object):
             os.remove(file_name)
 
     def extract_file_name(self, url):
-        file_name = self.http_base_dir + url.split('/')[-2] + '/' + url.split('/')[-1]
+        file_name = self.http_base_dir +'/'+ url.split('/')[-2] + '/' + url.split('/')[-1]
         return file_name
 
     def download_file(self, vm_path, guest_path, file_path, guest, password):
@@ -115,24 +117,31 @@ class VmFileProtocol(FileReceiveProtocol):
                 self.state = STATE_HEADER
 
         if self.state == STATE_HEADER:
-            if len(self.buffer) >= self.header_len:
-                header_string = self.buffer[0:self.header_len]
-                header_json = json.loads(header_string)
-                if 'vm_path' in header_json:
-                    vm_path = header_json['vm_path']
-                    guest_path = header_json['guest_path']
-                    url = self.server.on_download_request(vm_path, guest_path)
-                    # send url
-                    self.transport.write(encode_header({'url': url}))
-                    LOG.debug('Header: %s', header_json)
-                if 'cancel' in header_json:
-                    self.server.on_cancel(header_json['url'])
-                    LOG.debug('Header: %s', header_json)
-                if 'progress' in header_json:
-                    self.server.on_progress(header_json['url'], header_json['progress'])
-                self.buffer = self.buffer[self.header_len:]
-                self.state = STATE_LEN
+            try:
+                if len(self.buffer) >= self.header_len:
+                    header_string = self.buffer[0:self.header_len]
+                    header_json = json.loads(header_string)
+                    if 'vm_path' in header_json:
+                        vm_path = header_json['vm_path']
+                        guest_path = header_json['guest_path']
+                        url = self.server.on_download_request(vm_path, guest_path)
+                        # send url
+                        self.transport.write(encode_header({'url': url}))
+                        LOG.debug('Header: %s', header_json)
+                    if 'cancel' in header_json:
+                        self.server.on_cancel(header_json['url'])
+                        LOG.debug('Header: %s', header_json)
+                    if 'progress' in header_json:
+                        self.server.on_progress(header_json['url'], header_json['progress'])
+                    if 'receive' in header_json:
+                        LOG.debug('Client: %s', header_json['receive'])
+                    self.buffer = self.buffer[self.header_len:]
+                    self.state = STATE_LEN
+            except Exception as ex:
+                self.sendData({'server error ':str(ex)})
 
+    def sendData(self,data):
+        self.transport.write(encode_header(data))
 
 def main(http_host='127.0.0.1', http_base_dir='e:\\tmp'):
     if os.name != 'nt':

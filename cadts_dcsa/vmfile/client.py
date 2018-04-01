@@ -18,9 +18,12 @@ class VmFileClient(object):
         self.s = None
 
     def begin_download(self, vm_path, guest_path):
+
         download_url = send_request(s=self.s, vm_path=vm_path, guest_path=guest_path)
         LOG.debug("file %s url is %s", guest_path, download_url)
+        send_message(s=self.s,request={'receive':'begin to receive'})
         return download_url
+
 
     def download(self, url, local_path, progress_listener=None):
         LOG.debug("begin download file %s", local_path)
@@ -30,16 +33,21 @@ class VmFileClient(object):
         LOG.debug("file %s size %d", local_path, file_len)
         recv_size = 0
         BUF_SIZE = 4096
+        count=1024*1024/BUF_SIZE
+        t=0
         progress = 0.
         try:
-            with open(local_path, 'wb') as f:
+            with open(local_path+'/'+file_name, 'wb') as f:
                 buf = u.read(BUF_SIZE)
                 while buf:
                     f.write(buf)
                     recv_size += len(buf)
 
                     progress = recv_size * 100.0 / file_len
-                    self.report_progress(url, progress)
+                    t+=1                                    #每1MB报告一次进度
+                    if t==count:
+                        self.report_progress(url, progress)
+                        t=0
                     progress_listener(self, url, progress)
                     LOG.debug("progress: %f", progress)
 
@@ -70,7 +78,9 @@ class VmFileClient(object):
             self.s = None
 
 
+
 def send_request(s, vm_path, guest_path):  # request is a dict type
+    url=''
     request = {'vm_path': vm_path, 'guest_path': guest_path}
     header_string = encode_header(request)
     send_all(s, header_string)
@@ -80,9 +90,13 @@ def send_request(s, vm_path, guest_path):  # request is a dict type
         header_length, = struct.unpack('!I', len_string)
         json_string = receive_all(s, header_length)
         response = json.loads(json_string)
+        if 'server error ' in response:
+            raise Exception("Server error:%s", response['server error '])
+
         if 'url' in response:
             url = response['url']
-            return url
+        return url
+
 
 
 def send_message(s, request):
@@ -99,6 +113,7 @@ def fetch_file(vm_server, vm_path, local_path, guest_path):
             pass
 
     with VmFileClient(vm_server) as client:
+        # client.listen(client.s)
         url = client.begin_download(vm_path, guest_path)
         client.download(url, local_path, on_progress)
 
