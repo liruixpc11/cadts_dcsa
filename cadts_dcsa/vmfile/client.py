@@ -18,43 +18,43 @@ class VmFileClient(object):
         self.s = None
 
     def begin_download(self, vm_path, guest_path):
-
         download_url = send_request(s=self.s, vm_path=vm_path, guest_path=guest_path)
-        LOG.debug("file %s url is %s", guest_path, download_url)
-        send_message(s=self.s,request={'receive':'begin to receive'})
+        LOG.debug("file: '%s' url is: %s", guest_path, download_url)
+        send_message(s=self.s, request={'receive': 'begin to receive'})
         return download_url
 
-
     def download(self, url, local_path, progress_listener=None):
-        LOG.debug("begin download file %s", local_path)
         file_name = url.split('/')[-1]
+        local_file = local_path + os.sep + file_name
         u = urllib2.urlopen(url)
         file_len = int(u.info().getheaders("Content-Length")[0])
-        LOG.debug("file %s size %d", local_path, file_len)
+        LOG.debug("begin download file '%s' , size: %d", local_file, file_len)
         recv_size = 0
+        tmp_buf = 0
         BUF_SIZE = 4096
-        count=1024*1024/BUF_SIZE
-        t=0
         progress = 0.
         try:
-            with open(local_path+'/'+file_name, 'wb') as f:
+            with open(local_file, 'wb') as f:
                 buf = u.read(BUF_SIZE)
                 while buf:
                     f.write(buf)
                     recv_size += len(buf)
-
+                    tmp_buf += len(buf)
                     progress = recv_size * 100.0 / file_len
-                    t+=1                                    #每1MB报告一次进度
-                    if t==count:
-                        self.report_progress(url, progress)
-                        t=0
-                    progress_listener(self, url, progress)
-                    LOG.debug("progress: %f", progress)
-
+                    # 每1MB报告一次进度
+                    if tmp_buf >= 1024 * 1024:
+                        # self.report_progress(url, progress)
+                        progress_listener(self, url, progress)
+                        tmp_buf = 0
+                        LOG.debug("progress: %f", progress)
+                    if progress == 100.:
+                        # self.report_progress(url, progress)
+                        progress_listener(self, url, progress)
+                        LOG.debug("progress: %f", progress)
                     buf = u.read(BUF_SIZE)
-        except Exception as ex:
+        except Exception, ex:
             progress_listener(self, url, progress, str(ex))
-            LOG.error("download file %s from %s failed: %s", local_path, url, ex)
+            LOG.error("download file '%s' from %s failed: %s", local_file, url, ex)
 
     def cancel(self, url):
         request = {'cancel': True, 'url': url}
@@ -78,9 +78,8 @@ class VmFileClient(object):
             self.s = None
 
 
-
 def send_request(s, vm_path, guest_path):  # request is a dict type
-    url=''
+    url = ''
     request = {'vm_path': vm_path, 'guest_path': guest_path}
     header_string = encode_header(request)
     send_all(s, header_string)
@@ -91,12 +90,11 @@ def send_request(s, vm_path, guest_path):  # request is a dict type
         json_string = receive_all(s, header_length)
         response = json.loads(json_string)
         if 'server error ' in response:
-            raise Exception("Server error:%s", response['server error '])
+            raise Exception("Server error: %s", response['server error '])
 
         if 'url' in response:
             url = response['url']
         return url
-
 
 
 def send_message(s, request):
@@ -109,7 +107,7 @@ def fetch_file(vm_server, vm_path, local_path, guest_path):
         c.report_progress(url, progress)
         timeout = False
         if timeout or error:
-            # c.cancel(url)
+            c.cancel(url)
             pass
 
     with VmFileClient(vm_server) as client:

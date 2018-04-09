@@ -62,7 +62,6 @@ class VmFileServer(object):
         except Exception:
             pass
 
-
     def on_progress(self, url, progress):
         LOG.debug('url: %s; progress: %f.', url, progress)
         if progress == 100.:
@@ -80,11 +79,12 @@ class VmFileServer(object):
             os.remove(file_name)
 
     def extract_file_name(self, url):
-        file_name = self.http_base_dir +'/'+ url.split('/')[-2] + '/' + url.split('/')[-1]
+        file_name = self.http_base_dir + '/' + url.split('/')[-2] + '/' + url.split('/')[-1]
         return file_name
 
     def download_file(self, vm_path, guest_path, file_path, guest, password):
-        cmd = [VMRUN_PATH, '-T', 'ws', '-gu', guest, '-gp', password, 'copyFileFromGuestToHost', vm_path, guest_path, file_path]
+        cmd = [VMRUN_PATH, '-T', 'ws', '-gu', guest, '-gp', password, 'copyFileFromGuestToHost', vm_path, guest_path,
+               file_path]
         LOG.debug('EXEC: %s', ' '.join(cmd))
         subprocess.check_call(cmd)
 
@@ -138,10 +138,11 @@ class VmFileProtocol(FileReceiveProtocol):
                     self.buffer = self.buffer[self.header_len:]
                     self.state = STATE_LEN
             except Exception as ex:
-                self.sendData({'server error ':str(ex)})
+                self.sendData({'server error ': str(ex)})
 
-    def sendData(self,data):
+    def sendData(self, data):
         self.transport.write(encode_header(data))
+
 
 def main(http_host='127.0.0.1', http_base_dir='e:\\tmp'):
     if os.name != 'nt':
