@@ -6,6 +6,6 @@ hyperlink==17.3.1
 incremental==17.5.0
 six==1.11.0
 Twisted==17.9.0
-urllib3==1.22
+urllib3==1.26.5
 web.py==0.38
 zope.interface==4.4.3
